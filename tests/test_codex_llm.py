@@ -15,6 +15,7 @@ from openevolve.config import Config
 from openevolve.llm.codex import CodexLLM, _response_url, _sse_text
 from openevolve.llm.codex_auth import (
     CodexAuthManager,
+    CodexAuthError,
     CodexCredentials,
     CodexCredentialStore,
     _credentials_from_token_response,
@@ -29,6 +30,16 @@ def _jwt(account_id="acct_test"):
 
 
 class TestCodexAuth(unittest.TestCase):
+    def test_missing_credentials_explain_how_to_login(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "auth.json"
+            with self.assertRaises(CodexAuthError) as context:
+                CodexAuthManager(path).get_credentials()
+        message = str(context.exception)
+        self.assertIn("openevolve-auth login", message)
+        self.assertIn("opens a browser", message)
+        self.assertIn("credentials not found", message)
+
     def test_token_response_extracts_account_id(self):
         credentials = _credentials_from_token_response(
             {"access_token": _jwt(), "refresh_token": "refresh", "expires_in": 3600}
@@ -64,6 +75,19 @@ class TestCodexAuth(unittest.TestCase):
             credentials = CodexAuthManager(path, oauth=oauth).get_credentials()
             self.assertEqual(credentials.refresh_token, "new-refresh")
             oauth.refresh.assert_called_once_with("old-refresh")
+
+    def test_refresh_failure_explains_how_to_reauthenticate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "auth.json"
+            CodexCredentialStore(path).save(
+                CodexCredentials(_jwt(), "old-refresh", time.time() - 1, "acct_test")
+            )
+            oauth = MagicMock()
+            oauth.refresh.side_effect = CodexAuthError("invalid refresh token")
+            with self.assertRaises(CodexAuthError) as context:
+                CodexAuthManager(path, oauth=oauth).get_credentials()
+        self.assertIn("openevolve-auth login", str(context.exception))
+        self.assertIn("token refresh failed", str(context.exception))
 
 
 class TestCodexTransport(unittest.TestCase):

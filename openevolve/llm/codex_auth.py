@@ -71,6 +71,22 @@ def default_auth_path() -> Path:
     return Path(os.environ.get("OPENEVOLVE_CODEX_AUTH_PATH", DEFAULT_AUTH_PATH)).expanduser()
 
 
+def login_command(path: Path) -> str:
+    command = "openevolve-auth login"
+    if path != default_auth_path():
+        command += f" --auth-path {path}"
+    return command
+
+
+def login_required_message(path: Path, detail: str) -> str:
+    return (
+        "Codex authentication is required. "
+        f"Run `{login_command(path)}` to sign in with your ChatGPT account; "
+        "the command opens a browser for OAuth login. "
+        f"Details: {detail}"
+    )
+
+
 def _atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -95,7 +111,7 @@ class CodexCredentialStore:
     def load(self) -> CodexCredentials:
         if not self.path.exists():
             raise CodexAuthError(
-                f"No Codex credentials found at {self.path}. Run `openevolve-auth login`."
+                login_required_message(self.path, f"credentials not found at {self.path}")
             )
         try:
             credentials = CodexCredentials.from_dict(
@@ -104,7 +120,9 @@ class CodexCredentialStore:
             credentials.validate()
             return credentials
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            raise CodexAuthError(f"Could not read Codex credentials at {self.path}: {exc}") from exc
+            raise CodexAuthError(
+                login_required_message(self.path, f"could not read credentials: {exc}")
+            ) from exc
 
     def save(self, credentials: CodexCredentials) -> None:
         credentials.validate()
@@ -340,7 +358,12 @@ class CodexAuthManager:
             credentials = self.store.load()
             if not force_refresh and credentials.expires_at > time.time() + minimum_validity:
                 return credentials
-            refreshed = self.oauth.refresh(credentials.refresh_token)
+            try:
+                refreshed = self.oauth.refresh(credentials.refresh_token)
+            except CodexAuthError as exc:
+                raise CodexAuthError(
+                    login_required_message(self.store.path, f"token refresh failed: {exc}")
+                ) from exc
             self.store.save(refreshed)
             return refreshed
 

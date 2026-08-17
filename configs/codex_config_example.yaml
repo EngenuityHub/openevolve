@@ -1,0 +1,33 @@
+# OpenEvolve configuration using the ChatGPT subscription-backed Codex provider.
+# Authenticate first with: uv run openevolve-auth login
+
+max_iterations: 100
+checkpoint_interval: 10
+log_level: "INFO"
+
+llm:
+  provider: "codex"
+  # Optional; defaults to ~/.openevolve/codex_auth.json
+  # codex_auth_path: "~/.openevolve/codex_auth.json"
+  models:
+    - name: "gpt-5.6-luna"
+      weight: 1.0
+      timeout: 300
+      retries: 3
+      retry_delay: 5
+      reasoning_effort: "medium"
+
+prompt:
+  system_message: "You are an expert coder helping to improve programs through evolution."
+  evaluator_system_message: "You are an expert code reviewer."
+
+database:
+  in_memory: true
+  population_size: 100
+  archive_size: 20
+  num_islands: 3
+
+evaluator:
+  timeout: 300
+  max_retries: 3
+  use_llm_feedback: false

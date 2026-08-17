@@ -201,7 +201,7 @@ OpenEvolve implements a sophisticated **evolutionary coding pipeline** that goes
 <details>
 <summary><b>Advanced LLM Integration</b></summary>
 
-- **Universal API**: Works with OpenAI, Google, Claude Code CLI, local models, and proxies
+- **Universal API**: Works with OpenAI, Google, ChatGPT Codex OAuth, Claude Code CLI, local models, and proxies
 - **Intelligent Ensembles**: Weighted combinations with sophisticated fallback
 - **Test-Time Compute**: Enhanced reasoning through proxy systems (see [OptiLLM setup](#llm-provider-setup))
 - **Plugin Ecosystem**: Support for advanced reasoning plugins
@@ -232,7 +232,7 @@ OpenEvolve implements a sophisticated **evolutionary coding pipeline** that goes
 
 ### Requirements
 - **Python**: 3.10+ 
-- **LLM Access**: Any OpenAI-compatible API, or [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
+- **LLM Access**: Any OpenAI-compatible API, ChatGPT subscription-backed Codex OAuth, or [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 - **Optional**: Docker for containerized runs
 
 ### Installation Options
@@ -381,6 +381,43 @@ llm:
 ```
 
 See the [Claude Code quickstart example](examples/claude_code_quickstart/) for a complete walkthrough.
+
+</details>
+
+<details>
+<summary><b>🧠 ChatGPT Codex (OAuth Subscription)</b></summary>
+
+Use a ChatGPT subscription through OpenEvolve's native Codex provider. This uses
+OAuth credentials and direct HTTPS/SSE calls; it does not invoke the Codex CLI
+and does not use `OPENAI_API_KEY`.
+
+```bash
+# Authenticate once; opens a browser using your ChatGPT account
+uv run openevolve-auth login
+```
+
+```yaml
+# config.yaml
+llm:
+  provider: "codex"
+  models:
+    - name: "gpt-5.6-luna"
+      weight: 1.0
+      timeout: 300
+      retries: 3
+```
+
+Credentials are stored at `~/.openevolve/codex_auth.json` by default. To send
+one prompt without running an evolution:
+
+```bash
+PYTHONPATH=. uv run python scripts/test_codex_prompt.py \
+  --model gpt-5.6-luna \
+  "Reply with exactly: Codex provider works"
+```
+
+See [`configs/codex_config_example.yaml`](configs/codex_config_example.yaml)
+and [`docs/LLM_Abstraction.md`](docs/LLM_Abstraction.md) for details.
 
 </details>
 

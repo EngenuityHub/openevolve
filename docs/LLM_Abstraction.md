@@ -121,6 +121,10 @@ OPENAI_API_BASE
 
 Top-level `llm` values are propagated to each model unless that model explicitly defines its own value. This includes `api_key`, `api_base`, and `provider`.
 
+When `provider: codex` is selected, the Codex backend deliberately ignores
+`api_key` and `OPENAI_API_KEY`; it authenticates only with its ChatGPT OAuth
+credential store.
+
 ### Claude Code
 
 `ClaudeCodeLLM` does not make a direct API request. It invokes the locally installed Claude Code CLI:

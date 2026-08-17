@@ -56,6 +56,9 @@ class LLMModelConfig:
     api_key: Optional[str] = None
     name: str = None
 
+    # Codex OAuth credential file (used when provider is "codex")
+    codex_auth_path: Optional[str] = None
+
     # LLM provider: "openai" (default), "claude_code" (Claude Code CLI)
     provider: Optional[str] = None
 
@@ -182,6 +185,7 @@ class LLMConfig(LLMModelConfig):
             "provider": self.provider,
             "api_base": self.api_base,
             "api_key": self.api_key,
+            "codex_auth_path": self.codex_auth_path,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "max_tokens": self.max_tokens,
@@ -239,6 +243,7 @@ class LLMConfig(LLMModelConfig):
             "provider": self.provider,
             "api_base": self.api_base,
             "api_key": self.api_key,
+            "codex_auth_path": self.codex_auth_path,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "max_tokens": self.max_tokens,

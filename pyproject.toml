@@ -48,6 +48,7 @@ disallow_incomplete_defs = true
 
 [project.scripts]
 openevolve-run = "openevolve.cli:main"
+openevolve-auth = "openevolve.llm.codex_auth:main"
 
 [tool.pytest.ini_options]
 markers = [

@@ -1,0 +1,51 @@
+max_iterations: 100
+checkpoint_interval: 5
+random_seed: 42
+log_level: "INFO"
+
+llm:
+  provider: "codex"
+  models:
+    - name: "gpt-5.6-luna"
+      weight: 1.0
+      reasoning_effort: "medium"
+  max_tokens: 12000
+  timeout: 180
+
+prompt:
+  system_message: |
+    You are evolving a controller for Gymnasium CartPole-v1.
+    Improve the controller structure, not the evaluator. The candidate must
+    define parameter_spec() and make_controller(params). The evaluator tunes
+    the declared numeric parameters with SciPy. You may discover a design
+    better than PID: use nonlinear features, filtering, gain scheduling, or
+    stateful logic, while keeping the interface valid and the parameter count
+    at most 16. Do not change the scenario definitions or scoring contract.
+  num_top_programs: 3
+  num_diverse_programs: 2
+  include_artifacts: true
+  max_artifact_bytes: 30000
+
+database:
+  population_size: 40
+  archive_size: 20
+  num_islands: 3
+  elite_selection_ratio: 0.2
+  exploitation_ratio: 0.6
+  exploration_ratio: 0.4
+  feature_dimensions:
+    - mean_survival
+    - action_switch_rate
+  feature_bins: 8
+
+evaluator:
+  timeout: 120
+  max_retries: 1
+  cascade_evaluation: true
+  cascade_thresholds: [0.5]
+  parallel_evaluations: 3
+  use_llm_feedback: false
+  enable_artifacts: true
+
+diff_based_evolution: true
+max_code_length: 20000

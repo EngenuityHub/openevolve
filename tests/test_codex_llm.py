@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -14,19 +15,20 @@ from unittest.mock import MagicMock, patch
 from openevolve.config import Config
 from openevolve.llm.codex import CodexLLM, _response_url, _sse_text
 from openevolve.llm.codex_auth import (
-    CodexAuthManager,
     CodexAuthError,
+    CodexAuthManager,
     CodexCredentials,
     CodexCredentialStore,
+    CodexOAuthClient,
     _credentials_from_token_response,
 )
 from openevolve.llm.ensemble import _PROVIDER_REGISTRY, _create_model
 
 
-def _jwt(account_id="acct_test"):
+def _jwt(account_id="acct_test", marker=""):
     payload = {"https://api.openai.com/auth": {"chatgpt_account_id": account_id}}
     encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
-    return f"header.{encoded}.signature"
+    return f"header.{encoded}.signature{marker}"
 
 
 class TestCodexAuth(unittest.TestCase):
@@ -63,6 +65,15 @@ class TestCodexAuth(unittest.TestCase):
             credentials = CodexCredentialStore(path).load()
             self.assertEqual(credentials.account_id, "acct_pi")
 
+    def test_malformed_credentials_explain_how_to_login(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "auth.json"
+            path.write_text(json.dumps({"access_token": "only-access"}))
+            with self.assertRaises(CodexAuthError) as context:
+                CodexCredentialStore(path).load()
+        self.assertIn("openevolve-auth login", str(context.exception))
+        self.assertIn("missing required fields", str(context.exception))
+
     def test_manager_refreshes_expired_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "auth.json"
@@ -88,6 +99,51 @@ class TestCodexAuth(unittest.TestCase):
                 CodexAuthManager(path, oauth=oauth).get_credentials()
         self.assertIn("openevolve-auth login", str(context.exception))
         self.assertIn("token refresh failed", str(context.exception))
+
+    def test_concurrent_forced_refresh_reuses_rotated_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "auth.json"
+            store = CodexCredentialStore(path)
+            store.save(CodexCredentials(_jwt(), "old-refresh", time.time() + 3600, "acct_test"))
+            refreshed = CodexCredentials(
+                _jwt("acct_test", marker="-new"),
+                "new-refresh",
+                time.time() + 3600,
+                "acct_test",
+            )
+            oauth = MagicMock()
+
+            def refresh(refresh_token):
+                time.sleep(0.05)
+                self.assertEqual(refresh_token, "old-refresh")
+                return refreshed
+
+            oauth.refresh.side_effect = refresh
+            barrier = threading.Barrier(2)
+            results = []
+            errors = []
+
+            def worker():
+                try:
+                    barrier.wait()
+                    results.append(
+                        CodexAuthManager(path, oauth=oauth).get_credentials(
+                            force_refresh=True, failed_access_token=_jwt()
+                        )
+                    )
+                except Exception as exc:  # pragma: no cover - failure assertion below
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=worker) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(errors, [])
+            self.assertEqual(len(results), 2)
+            self.assertTrue(all(item.refresh_token == "new-refresh" for item in results))
+            oauth.refresh.assert_called_once_with("old-refresh")
 
 
 class TestCodexTransport(unittest.TestCase):
@@ -162,6 +218,17 @@ class TestCodexTransport(unittest.TestCase):
             }
         )
         self.assertEqual(config.llm.models[0].codex_auth_path, "/tmp/codex-auth.json")
+
+    @patch("openevolve.llm.codex_auth.webbrowser.open")
+    @patch("openevolve.llm.codex_auth._OAuthCallbackServer")
+    def test_oauth_callback_is_closed_when_wait_fails(self, callback_cls, _open):
+        callback = callback_cls.return_value
+        callback.wait.side_effect = CodexAuthError("callback timed out")
+        oauth = CodexOAuthClient()
+        with self.assertRaises(CodexAuthError):
+            oauth.login()
+        callback.start.assert_called_once_with()
+        callback.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

@@ -119,7 +119,7 @@ class CodexCredentialStore:
             )
             credentials.validate()
             return credentials
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        except (CodexAuthError, OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             raise CodexAuthError(
                 login_required_message(self.path, f"could not read credentials: {exc}")
             ) from exc
@@ -262,8 +262,10 @@ class CodexOAuthClient:
         print("Opening OpenAI login in your browser...")
         print(f"If it does not open, visit:\n{authorization_url}")
         webbrowser.open(authorization_url)
-        code = callback.wait()
-        callback.close()
+        try:
+            code = callback.wait()
+        finally:
+            callback.close()
         if not code:
             raise CodexAuthError("Codex OAuth login did not return an authorization code")
 
@@ -319,7 +321,9 @@ class _OAuthCallbackServer:
             self.server = HTTPServer(("127.0.0.1", 1455), Handler)
         except OSError as exc:
             raise CodexAuthError("Could not bind OAuth callback on 127.0.0.1:1455") from exc
-        self.thread = threading.Thread(target=self.server.handle_request, daemon=True)
+        # Keep the server loop alive until close() calls shutdown(), so the
+        # listening socket is released cleanly after the callback request.
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
     def wait(self, timeout: float = 600) -> str:
@@ -331,7 +335,10 @@ class _OAuthCallbackServer:
 
     def close(self) -> None:
         if self.server:
+            self.server.shutdown()
             self.server.server_close()
+        if self.thread and self.thread is not threading.current_thread():
+            self.thread.join(timeout=1)
 
 
 class CodexAuthManager:
@@ -347,7 +354,10 @@ class CodexAuthManager:
         return credentials
 
     def get_credentials(
-        self, minimum_validity: float = 300, force_refresh: bool = False
+        self,
+        minimum_validity: float = 300,
+        force_refresh: bool = False,
+        failed_access_token: Optional[str] = None,
     ) -> CodexCredentials:
         credentials = self.store.load()
         if not force_refresh and credentials.expires_at > time.time() + minimum_validity:
@@ -356,6 +366,10 @@ class CodexAuthManager:
         with self.store.locked():
             # Another process may have refreshed while we waited for the lock.
             credentials = self.store.load()
+            if failed_access_token and credentials.access_token != failed_access_token:
+                # A concurrent request already rotated the refresh token. Reuse
+                # the credentials it persisted instead of rotating again.
+                return credentials
             if not force_refresh and credentials.expires_at > time.time() + minimum_validity:
                 return credentials
             try:

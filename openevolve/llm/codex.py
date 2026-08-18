@@ -147,12 +147,18 @@ class CodexLLM(LLMInterface):
         retries = kwargs.get("retries", self.retries)
         retry_delay = kwargs.get("retry_delay", self.retry_delay)
         force_refresh = False
+        failed_access_token = None
 
         attempt = 0
         max_attempts = retries + 1
         while attempt < max_attempts:
             try:
-                credentials = await asyncio.to_thread(self.auth.get_credentials, 300, force_refresh)
+                credentials = await asyncio.to_thread(
+                    self.auth.get_credentials,
+                    300,
+                    force_refresh,
+                    failed_access_token,
+                )
                 headers = {
                     "Authorization": f"Bearer {credentials.access_token}",
                     "chatgpt-account-id": credentials.account_id,
@@ -174,6 +180,7 @@ class CodexLLM(LLMInterface):
             except CodexHTTPError as exc:
                 if exc.status == 401 and not force_refresh:
                     force_refresh = True
+                    failed_access_token = credentials.access_token
                     # A refresh retry is mandatory even when the configured
                     # normal retry count is zero.
                     max_attempts += 1

@@ -96,6 +96,15 @@ llm:
   max_tokens: 4000
   timeout: 120
 
+# For ChatGPT subscription-backed Codex instead, use:
+# llm:
+#   provider: "codex"
+#   models:
+#     - name: "gpt-5.6-luna"
+#       weight: 1.0
+#   timeout: 120
+# Authenticate first with: uv run openevolve-auth login
+
 # Database configuration (MAP-Elites algorithm)
 database:
   population_size: 50
@@ -128,6 +137,7 @@ log_level: "INFO"
 - ✅ **`feature_dimensions` must be a list** (e.g., `["score", "complexity"]`), not an integer
 - ✅ Set appropriate timeouts for your use case
 - ✅ Configure LLM settings for your provider
+- ✅ Use the native Codex provider with ChatGPT OAuth
 - ✅ Use meaningful `system_message` to guide evolution
 
 ## Common Configuration Mistakes

@@ -28,6 +28,12 @@ Multiple example configurations for different scenarios:
 
 Includes guidelines for choosing parameters based on your problem characteristics.
 
+### `codex_config_example.yaml`
+
+A configuration example for the native ChatGPT subscription-backed Codex
+provider. It uses OAuth credentials, direct HTTPS/SSE calls, and the
+`gpt-5.6-luna` model.
+
 ## Island-Based Evolution Parameters
 
 The key new parameters for proper evolutionary diversity are:
@@ -59,6 +65,13 @@ Copy any of these files as a starting point for your configuration:
 ```bash
 cp configs/default_config.yaml my_config.yaml
 # Edit my_config.yaml for your specific needs
+```
+
+For the Codex example, authenticate first:
+
+```bash
+uv run openevolve-auth login
+cp configs/codex_config_example.yaml my_codex_config.yaml
 ```
 
 Then use with OpenEvolve:

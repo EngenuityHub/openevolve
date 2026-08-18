@@ -23,6 +23,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from openevolve.llm.codex import CodexLLM
+    _PROVIDER_REGISTRY["codex"] = lambda cfg: CodexLLM(cfg)
+except ImportError:
+    pass
+
 
 def _create_model(model_cfg: LLMModelConfig) -> LLMInterface:
     if model_cfg.init_client:
